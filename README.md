@@ -1,129 +1,124 @@
 # A Comparative Evaluation of Statistical, Machine Learning, Deep Learning, and Transformer Models for Sector-Specific Stock Forecasting in Indian Financial Markets
 
-A notebook-based research project — not an application. It compares seven
-forecasting models of increasing complexity on daily stock-return
-forecasting across four sectors of the Indian equity market, and asks
-whether the added complexity is actually worth it.
+A reproducible research study comparing **7 forecasting models** — from a random-walk baseline to a Transformer — on **daily log-return forecasting** for **12 large-cap NSE stocks across 4 sectors** (2016–2026), using strict walk-forward validation and formal statistical significance testing.
 
-## Research question
+![Python](https://img.shields.io/badge/Python-3.11-blue) ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c) ![statsmodels](https://img.shields.io/badge/statsmodels-0.14-lightgrey) ![XGBoost](https://img.shields.io/badge/XGBoost-2.x-green) ![License](https://img.shields.io/badge/data-MIT%20(eod2__data)-yellow)
 
-> Do increasingly complex forecasting models actually improve out-of-sample
-> stock forecasting performance, and does model performance differ across
-> Indian market sectors?
+---
 
-## Key finding
+## TL;DR
 
-**No — and the effect runs the other way.** On error-magnitude metrics
-(MAE, RMSE), forecasting accuracy gets worse, on average, as model
-complexity increases past Random Forest. A Friedman test across all 12
-stocks confirms this is not noise (p < 0.0001), and Diebold-Mariano tests
-show the simpler model in a pair significantly beats the more complex one
-on up to 58% of individual stocks (LSTM vs. Transformer). The one
-exception is directional accuracy, where the Transformer is narrowly the
-best of the seven models (52.4% vs. a 50% coin flip) — a real but small
-edge that doesn't show up in its error magnitude. Full detail, numbers,
-and discussion are in `notebooks/06_model_comparison.ipynb`.
+> **Research question:** Do increasingly complex models improve out-of-sample daily stock-return forecasts, and does the answer differ by sector?
+
+**No model beats a naive "no-change" forecast in any meaningful way.**
+
+- On MAE/RMSE, Random Walk, ARIMA, Random Forest, LSTM, 1D-CNN and the Transformer all land within **~0.2%** of each other (MAE ≈ 0.0106).
+- **XGBoost is the one clear loser.** It is significantly worse than ARIMA on **9 of 12 stocks** (Diebold–Mariano, 5%), and the Friedman test across all 7 models × 12 stocks rejects equal ranks (χ² = 14.9, **p = 0.021**), mostly because XGBoost ranks last.
+- **Directional accuracy is a coin flip for every model** (49.4%–50.7%). None differs from 50% under a binomial test (all p > 0.37, n ≈ 4,700 predictions per model).
+- A GARCH(1,1) volatility side-experiment loses to a naive trailing-volatility rule on **10 of 12 stocks**.
+
+Extra model capacity bought no extra accuracy. On noisy, near-efficient daily returns, the honest baseline is very hard to beat. That is a known result in financial econometrics, and this project confirms it on Indian large caps with a leakage-safe protocol.
+
+---
 
 ## Dataset
 
-- **Source:** NSE (National Stock Exchange of India) end-of-day bhavcopy
-  data, redistributed per-stock by the open-source
-  [`eod2_data`](https://github.com/BennyThadikaran/eod2_data) project
-  (MIT-licensed, updated weekly from NSE's own published reports). NSE's
-  own site blocks automated downloads from this project's execution
-  environment, so this NSE-sourced mirror was used instead — see
-  Limitations.
-- **Download date:** 2026-09-10.
-- **Date range used:** 2016-01-01 to 2026-08-31 (~10.7 years, ~2,638
-  trading days per stock).
-- **Variables:** Date, Open, High, Low, Close, Volume. Close is
-  split/bonus-adjusted but not dividend-adjusted (no separate "Adjusted
-  Close" in this source).
-- **Companies and sectors** (3 per sector, chosen for size, liquidity, and
-  long listing history):
+| | |
+|---|---|
+| **Source** | NSE end-of-day bhavcopy data via the open-source [`eod2_data`](https://github.com/BennyThadikaran/eod2_data) mirror (MIT) |
+| **Period** | 2016-01-01 → 2026-08-31 (~2,638 trading days per stock) |
+| **Fields** | Date, Open, High, Low, Close, Volume (split/bonus adjusted, **not** dividend adjusted) |
+| **Universe** | 12 stocks, 4 sectors |
 
-  | Sector | Companies |
-  |---|---|
-  | Banking | HDFC Bank, ICICI Bank, State Bank of India |
-  | IT | TCS, Infosys, Wipro |
-  | Healthcare | Sun Pharma, Dr. Reddy's Laboratories, Cipla |
-  | Automotive | Maruti Suzuki, Bajaj Auto, Mahindra & Mahindra |
+| Sector | Stocks |
+|---|---|
+| Banking | HDFC Bank, ICICI Bank, SBI |
+| IT | TCS, Infosys, Wipro |
+| Healthcare | Sun Pharma, Dr. Reddy's, Cipla |
+| Automotive | Maruti Suzuki, Bajaj Auto, M&M |
 
-Raw CSVs live in `data/raw/<sector>/<TICKER>.csv`; the cleaned, combined
-dataset used by every notebook from 01 onward is written to
-`data/processed/prices_processed.csv`.
+All data is included in `data/raw/`, so no internet or API keys are needed.
+
+---
 
 ## Methodology
 
-- **Target variable:** daily **log returns**, not price levels. Notebook
-  02 shows ADF/KPSS tests agree prices are non-stationary and returns are
-  stationary — forecasting non-stationary price levels directly would let
-  any model look good just by tracking the trend.
-- **Validation:** strictly chronological, walk-forward, expanding-window.
-  The final 15% of each stock's history is held out; predictions are made
-  one quarter (63 trading days) at a time, after which that quarter is
-  folded into the training window before the next refit. No model ever
-  trains on data from its own test period. Scaling/feature stats are
-  fit on training data only, per fold.
-- **Feature engineering** (Random Forest, XGBoost, LSTM, 1D-CNN,
-  Transformer): lagged returns, rolling mean/std of returns, momentum,
-  volume change, high-low range, and 14-day RSI — all computed only from
-  information available up to the prediction day (`src/features.py`).
+**1. Target selection is driven by the statistics.** ADF and KPSS agree for 12/12 stocks that prices are non-stationary and log returns are stationary, so every model forecasts **next-day log return**.
 
-## Models (increasing complexity)
+**2. Diagnostics shape the modelling choices** (notebook 02):
 
-1. Random Walk / no-change baseline
-2. ARIMA
-3. Random Forest
-4. XGBoost
-5. LSTM
-6. 1D-CNN
-7. Transformer (small, single-encoder-layer)
+| Test | Finding | Decision |
+|---|---|---|
+| ADF + KPSS | Prices non-stationary, returns stationary | Forecast returns, not prices |
+| Ljung–Box | Weak autocorrelation in ~half the stocks | Expect little linear signal for ARIMA |
+| Jarque–Bera | Fat tails in all 12 (excess kurtosis 3.9–13.2) | MAE and directional accuracy are the primary metrics, not RMSE alone |
+| ARCH-LM | Volatility clustering in all 12 | Run a separate GARCH volatility experiment |
 
-## Evaluation metrics
+**3. Leakage-safe validation**
+- Chronological **expanding-window walk-forward**. The last 15% of each series is the test set, and models are refit every quarter (63 trading days).
+- Features at day *t* use only information up to *t*'s close. The target is *t+1* (checked explicitly in notebook 03).
+- Scalers and early-stopping validation slices are fit **only on each fold's training data**.
+- Hyperparameters are chosen on a pre-test validation slice, never on the test set.
 
-MAE, RMSE, and Directional Accuracy on genuinely out-of-sample
-predictions, compared per model per sector. Directional Accuracy is
-undefined (not 0%) for the Random Walk baseline, since predicting exactly
-zero return makes no directional call at all — see `src/eval_utils.py`.
-R² is reported for reference only; MAPE is deliberately not used (returns
-near zero make it unstable and misleading).
+**4. Models** (increasing complexity)
 
-## Statistical tests
+| # | Model | Inputs | Notes |
+|---|---|---|---|
+| 1 | Random Walk | — | Predicts 0 return |
+| 2 | ARIMA | Returns | Order picked by AIC from a small candidate set |
+| 3 | Random Forest | 16 engineered features | 200 trees, depth 4 |
+| 4 | XGBoost | 16 engineered features | 200 trees, depth 3, lr 0.05 |
+| 5 | LSTM | 30-day × 3-channel window | 1 layer, 32 units (4.8k params) |
+| 6 | 1D-CNN | 30-day × 3-channel window | 2 conv layers (1.8k params) |
+| 7 | Transformer | 30-day × 3-channel window | 1 encoder layer, 4 heads, learned positional embedding |
 
-- **ADF / KPSS** — stationarity of prices vs. returns (notebook 02)
-- **Ljung-Box** — autocorrelation in returns (notebook 02)
-- **Jarque-Bera** — normality / fat tails of returns (notebook 02)
-- **ARCH-LM (Engle)** — volatility clustering (notebook 02)
-- **Diebold-Mariano** — pairwise forecast-accuracy significance (notebook 06)
-- **Friedman** — omnibus test across all 7 models x 12 stocks (notebook 06)
+The engineered features are return lags 1–5, rolling mean and std (5/10/21), 5- and 10-day momentum, volume change, high-low range and RSI-14.
 
-## GARCH
+**5. Evaluation.** MAE, RMSE and directional accuracy are computed out-of-sample. Significance comes from **Diebold–Mariano** pairwise tests per stock and a **Friedman** omnibus test across stocks. There is also a volatility-regime split, the GARCH side-experiment, and a naive long/cash backtest.
 
-Included only as a **small, separate volatility-forecasting
-side-experiment** (notebook 06, Section 7), not as an eighth row in the
-main model comparison — GARCH forecasts variance, not the direction or
-magnitude of the next return, so it isn't answering the same question as
-the other seven models. Result: a naive trailing-volatility benchmark
-actually beats GARCH(1,1) on 10 of 12 stocks, a useful negative result in
-its own right.
+---
 
-## Simple backtest
+## Results (reproduced run)
 
-An optional, deliberately simple long/cash directional strategy (notebook
-06, Section 8) — no transaction costs, slippage, or position sizing.
-**Forecasting accuracy does not necessarily imply investment
-profitability**, and this table should be read as a sanity check, not a
-strategy evaluation.
+### MAE by model and sector (lower is better)
+
+| Model | Banking | IT | Healthcare | Automotive | **Overall** |
+|---|---|---|---|---|---|
+| Random Walk | 0.00911 | 0.01203 | 0.00971 | **0.01176** | 0.01065 |
+| ARIMA | 0.00912 | 0.01211 | 0.00971 | 0.01176 | 0.01067 |
+| Random Forest | **0.00911** | 0.01210 | 0.00960 | 0.01182 | 0.01066 |
+| XGBoost | 0.00923 | 0.01247 | 0.00988 | 0.01221 | 0.01095 |
+| LSTM | 0.00914 | 0.01204 | **0.00959** | 0.01177 | **0.01064** |
+| 1D-CNN | 0.00915 | **0.01202** | 0.00960 | 0.01179 | 0.01064 |
+| Transformer | 0.00919 | 0.01202 | 0.00961 | 0.01182 | 0.01066 |
+
+### Statistical significance
+
+| Diebold–Mariano pair | Stocks significant at 5% (of 12) | Direction |
+|---|---|---|
+| Random Walk vs ARIMA | 3 | All favour Random Walk |
+| ARIMA vs XGBoost | **9** | All favour ARIMA |
+| ARIMA vs LSTM | 2 | 1 each way |
+| LSTM vs Transformer | 0 | — |
+
+- The Friedman test on MAE ranks gives χ² = 14.86, p = 0.021. Average ranks: LSTM 3.17, Random Walk 3.33, 1D-CNN 3.42, RF 3.58, ARIMA 4.25, Transformer 4.25, XGBoost 6.00.
+- Directional accuracy for every model is 49.4%–50.7%, and no model differs significantly from 50%.
+
+### Other findings
+- **Sectors:** The winning model changes by sector (RF in Banking, 1D-CNN in IT, LSTM in Healthcare, Random Walk in Automotive), but the margins are in the 4th–5th decimal place. Sector affects **how predictable** returns are (Banking MAE ≈ 0.0091 vs IT ≈ 0.0120) far more than **which model** to use.
+- **Volatility regimes:** Every model's errors grow in high-volatility periods. No model gains a directional edge in either regime.
+- **GARCH(1,1):** A naive 21-day trailing volatility beats it on 10/12 stocks. GARCH wins only on TCS and Infosys.
+- **Backtest** (long/cash, no costs): buy-and-hold lost money over the test window (−0.65 summed log-return). LSTM was the only model with a positive total (+0.20). Given the coin-flip directional accuracy, treat that as noise, not a trading signal.
+
+---
 
 ## Limitations
+- Third-party NSE mirror, and prices are not dividend-adjusted.
+- 12 large, liquid, surviving companies, so there is survivorship bias and the results may not carry over to mid or small caps.
+- ~2,600 observations per stock is small for deep models.
+- Refits are quarterly, not daily. **ARIMA and GARCH produce multi-step (up to 63-day-ahead) forecasts from each quarterly fit.** The feature-based models, by contrast, use fresh inputs every day. This handicaps the two statistical models slightly.
+- Deep-learning results are sensitive to training-loop details (target scaling, early stopping). An earlier run of this project with a different loop showed the DL models noticeably *worse* than the baselines, not level with them.
+- The backtest ignores transaction costs, slippage and taxes.
 
-Third-party (not direct NSE/BSE) data source; no dividend adjustment;
-inherent limits to daily-return predictability for large, liquid,
-heavily-analysed stocks; modest sample size (~2,600 observations/stock)
-for the deep-learning models; 12-stock, 4-sector universe rather than the
-full market; survivorship (all 12 companies are currently healthy,
-long-listed businesses); quarterly (not daily) walk-forward refitting;
-single GARCH(1,1)/normal specification; no transaction costs in the
-backtest. Full discussion in notebook 06, Section 10.
+---
 
