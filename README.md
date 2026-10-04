@@ -1,6 +1,6 @@
 # A Comparative Evaluation of Statistical, Machine Learning, Deep Learning, and Transformer Models for Sector-Specific Stock Forecasting in Indian Financial Markets
 
-A reproducible research study comparing **7 forecasting models** — from a random-walk baseline to a Transformer — on **daily log-return forecasting** for **12 large-cap NSE stocks across 4 sectors** (2016–2026), using strict walk-forward validation and formal statistical significance testing.
+A reproducible research study comparing **7 forecasting models** from a random-walk baseline to a Transformer  on **daily log-return forecasting** for **12 large-cap NSE stocks across 4 sectors** (2016–2026), using strict walk-forward validation and formal statistical significance testing.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue) ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c) ![statsmodels](https://img.shields.io/badge/statsmodels-0.14-lightgrey) ![XGBoost](https://img.shields.io/badge/XGBoost-2.x-green) ![License](https://img.shields.io/badge/data-MIT%20(eod2__data)-yellow)
 
